@@ -39,7 +39,7 @@ internal sealed class UsageForm : Form
         ShowInTaskbar = true;
         BackColor = Color.FromArgb(25, 27, 31);
         ForeColor = Color.FromArgb(238, 240, 243);
-        ClientSize = new Size(360, 410);
+        ClientSize = new Size(360, 378);
         Font = new Font("Segoe UI", 9F);
 
         var root = new TableLayoutPanel
@@ -53,8 +53,8 @@ internal sealed class UsageForm : Form
         root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         root.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 24));
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 24));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 22));
@@ -81,7 +81,7 @@ internal sealed class UsageForm : Form
         _status.Dock = DockStyle.Fill;
         _status.TextAlign = ContentAlignment.MiddleLeft;
         _status.ForeColor = Color.FromArgb(175, 181, 191);
-        root.Controls.Add(_status, 0, 1);
+        root.Controls.Add(_status, 0, 2);
         root.SetColumnSpan(_status, 2);
 
         _windows.Dock = DockStyle.Fill;
@@ -89,7 +89,7 @@ internal sealed class UsageForm : Form
         _windows.WrapContents = false;
         _windows.AutoScroll = false;
         _windows.BackColor = BackColor;
-        root.Controls.Add(_windows, 0, 2);
+        root.Controls.Add(_windows, 0, 1);
         root.SetColumnSpan(_windows, 2);
 
         _connect.Text = "Connect with ChatGPT";
@@ -100,9 +100,10 @@ internal sealed class UsageForm : Form
         root.Controls.Add(_connect, 0, 4);
         root.SetColumnSpan(_connect, 2);
 
+        var version = typeof(UsageForm).Assembly.GetName().Version?.ToString(3) ?? "unknown";
         var footer = new Label
         {
-            Text = "Updates automatically every minute",
+            Text = $"Updates automatically every minute · v{version}",
             Dock = DockStyle.Fill,
             TextAlign = ContentAlignment.MiddleCenter,
             ForeColor = Color.FromArgb(125, 132, 143),
@@ -314,7 +315,7 @@ internal sealed class UsageForm : Form
         foreach (var row in rows.OrderBy(x => x.DurationMinutes == 0 ? int.MaxValue : x.DurationMinutes))
             _windows.Controls.Add(new UsageRow(row));
         _windows.ResumeLayout();
-        ClientSize = new Size(ClientSize.Width, Math.Max(410, 204 + rows.Count * 87));
+        ClientSize = new Size(ClientSize.Width, Math.Max(378, 204 + rows.Count * 87));
         _status.Text = $"Updated {DateTime.Now:t} · {rows.Count} usage window{(rows.Count == 1 ? "" : "s")}";
     }
 
