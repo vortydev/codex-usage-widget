@@ -39,7 +39,7 @@ internal sealed class UsageForm : Form
         ShowInTaskbar = true;
         BackColor = Color.FromArgb(25, 27, 31);
         ForeColor = Color.FromArgb(238, 240, 243);
-        ClientSize = new Size(360, 360);
+        ClientSize = new Size(360, 410);
         Font = new Font("Segoe UI", 9F);
 
         var root = new TableLayoutPanel
@@ -48,13 +48,14 @@ internal sealed class UsageForm : Form
             BackColor = BackColor,
             Padding = new Padding(14),
             ColumnCount = 2,
-            RowCount = 5,
+            RowCount = 6,
         };
         root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         root.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 24));
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 22));
 
@@ -69,10 +70,12 @@ internal sealed class UsageForm : Form
         root.Controls.Add(title, 0, 0);
 
         _refresh.Text = "Refresh";
-        StyleButton(_refresh, primary: false);
-        _refresh.Width = 78;
+        StyleButton(_refresh, primary: true);
+        _refresh.Size = new Size(108, 30);
+        _refresh.Text = "↻  Refresh";
         _refresh.Click += (_, _) => RefreshUsage();
-        root.Controls.Add(_refresh, 1, 0);
+        root.Controls.Add(_refresh, 0, 3);
+        root.SetColumnSpan(_refresh, 2);
 
         _status.Text = "Starting local Codex connection…";
         _status.Dock = DockStyle.Fill;
@@ -84,7 +87,7 @@ internal sealed class UsageForm : Form
         _windows.Dock = DockStyle.Fill;
         _windows.FlowDirection = FlowDirection.TopDown;
         _windows.WrapContents = false;
-        _windows.AutoScroll = true;
+        _windows.AutoScroll = false;
         _windows.BackColor = BackColor;
         root.Controls.Add(_windows, 0, 2);
         root.SetColumnSpan(_windows, 2);
@@ -94,18 +97,18 @@ internal sealed class UsageForm : Form
         _connect.Dock = DockStyle.Fill;
         _connect.Visible = false;
         _connect.Click += (_, _) => ConnectWithChatGpt();
-        root.Controls.Add(_connect, 0, 3);
+        root.Controls.Add(_connect, 0, 4);
         root.SetColumnSpan(_connect, 2);
 
         var footer = new Label
         {
-            Text = "Updates automatically every minute · Always on top",
+            Text = "Updates automatically every minute",
             Dock = DockStyle.Fill,
             TextAlign = ContentAlignment.MiddleCenter,
             ForeColor = Color.FromArgb(125, 132, 143),
             Font = new Font("Segoe UI", 8F),
         };
-        root.Controls.Add(footer, 0, 4);
+        root.Controls.Add(footer, 0, 5);
         root.SetColumnSpan(footer, 2);
 
         Controls.Add(root);
@@ -311,6 +314,7 @@ internal sealed class UsageForm : Form
         foreach (var row in rows.OrderBy(x => x.DurationMinutes == 0 ? int.MaxValue : x.DurationMinutes))
             _windows.Controls.Add(new UsageRow(row));
         _windows.ResumeLayout();
+        ClientSize = new Size(ClientSize.Width, Math.Max(410, 204 + rows.Count * 87));
         _status.Text = $"Updated {DateTime.Now:t} · {rows.Count} usage window{(rows.Count == 1 ? "" : "s")}";
     }
 
