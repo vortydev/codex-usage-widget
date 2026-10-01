@@ -19,10 +19,12 @@ internal static class Program
 internal sealed class UsageForm : Form
 {
     private readonly Label _status = new();
+    private readonly Label _footer = new();
     private readonly FlowLayoutPanel _windows = new();
     private readonly Button _connect = new();
     private readonly Button _refresh = new();
     private readonly System.Windows.Forms.Timer _poll = new() { Interval = 60_000 };
+    private readonly WidgetSettings _settings = WidgetSettings.Load();
     private AppServerClient? _server;
     private bool _connected;
 
@@ -31,16 +33,74 @@ internal sealed class UsageForm : Form
         Text = "Codex Usage";
         StartPosition = FormStartPosition.Manual;
         FormBorderStyle = FormBorderStyle.FixedSingle;
+        MinimumSize = new Size(380, 420);
         ControlBox = true;
         MinimizeBox = true;
         MaximizeBox = false;
-        ShowIcon = false;
-        TopMost = true;
+        ShowIcon = true;
+        Icon = System.Drawing.Icon.ExtractAssociatedIcon(Application.ExecutablePath) ?? Icon;
+        TopMost = _settings.AlwaysOnTop;
         ShowInTaskbar = true;
         BackColor = Color.FromArgb(25, 27, 31);
         ForeColor = Color.FromArgb(238, 240, 243);
-        ClientSize = new Size(360, 378);
+        ClientSize = new Size(360, 410);
         Font = new Font("Segoe UI", 9F);
+
+        var tabs = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 1,
+            RowCount = 2,
+            BackColor = BackColor,
+        };
+        tabs.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        tabs.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
+        tabs.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+
+        var tabHeader = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 2,
+            RowCount = 2,
+            Margin = Padding.Empty,
+            BackColor = BackColor,
+        };
+        tabHeader.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+        tabHeader.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+        tabHeader.RowStyles.Add(new RowStyle(SizeType.Absolute, 31));
+        tabHeader.RowStyles.Add(new RowStyle(SizeType.Absolute, 3));
+        var usageTab = CreateTabButton("Usage");
+        var settingsTab = CreateTabButton("Settings");
+        var usageIndicator = new Panel { Dock = DockStyle.Fill, Margin = Padding.Empty };
+        var settingsIndicator = new Panel { Dock = DockStyle.Fill, Margin = Padding.Empty };
+        tabHeader.Controls.Add(usageTab, 0, 0);
+        tabHeader.Controls.Add(settingsTab, 1, 0);
+        tabHeader.Controls.Add(usageIndicator, 0, 1);
+        tabHeader.Controls.Add(settingsIndicator, 1, 1);
+
+        var content = new Panel { Dock = DockStyle.Fill, BackColor = BackColor, Margin = Padding.Empty };
+        var usagePage = new Panel { Dock = DockStyle.Fill, BackColor = BackColor };
+        var settingsPage = new Panel { Dock = DockStyle.Fill, BackColor = BackColor };
+        content.Controls.Add(usagePage);
+        content.Controls.Add(settingsPage);
+        void SelectTab(bool settings)
+        {
+            usagePage.Visible = !settings;
+            settingsPage.Visible = settings;
+            if (settings) settingsPage.BringToFront();
+            else usagePage.BringToFront();
+            usageTab.BackColor = settings ? BackColor : Color.FromArgb(35, 39, 46);
+            settingsTab.BackColor = settings ? Color.FromArgb(35, 39, 46) : BackColor;
+            usageTab.ForeColor = settings ? Color.FromArgb(175, 181, 191) : Color.White;
+            settingsTab.ForeColor = settings ? Color.White : Color.FromArgb(175, 181, 191);
+            usageIndicator.BackColor = settings ? Color.FromArgb(49, 55, 64) : Color.FromArgb(42, 185, 160);
+            settingsIndicator.BackColor = settings ? Color.FromArgb(42, 185, 160) : Color.FromArgb(49, 55, 64);
+        }
+        usageTab.Click += (_, _) => SelectTab(false);
+        settingsTab.Click += (_, _) => SelectTab(true);
+        SelectTab(false);
+        tabs.Controls.Add(tabHeader, 0, 0);
+        tabs.Controls.Add(content, 0, 1);
 
         var root = new TableLayoutPanel
         {
@@ -89,6 +149,7 @@ internal sealed class UsageForm : Form
         _windows.WrapContents = false;
         _windows.AutoScroll = false;
         _windows.BackColor = BackColor;
+        _windows.SizeChanged += (_, _) => ResizeUsageRows();
         root.Controls.Add(_windows, 0, 1);
         root.SetColumnSpan(_windows, 2);
 
@@ -101,18 +162,17 @@ internal sealed class UsageForm : Form
         root.SetColumnSpan(_connect, 2);
 
         var version = typeof(UsageForm).Assembly.GetName().Version?.ToString(3) ?? "unknown";
-        var footer = new Label
-        {
-            Text = $"Updates automatically every minute · v{version}",
-            Dock = DockStyle.Fill,
-            TextAlign = ContentAlignment.MiddleCenter,
-            ForeColor = Color.FromArgb(125, 132, 143),
-            Font = new Font("Segoe UI", 8F),
-        };
-        root.Controls.Add(footer, 0, 5);
-        root.SetColumnSpan(footer, 2);
+        _footer.Dock = DockStyle.Fill;
+        _footer.TextAlign = ContentAlignment.MiddleCenter;
+        _footer.ForeColor = Color.FromArgb(125, 132, 143);
+        _footer.Font = new Font("Segoe UI", 8F);
+        UpdateFooter(version);
+        root.Controls.Add(_footer, 0, 5);
+        root.SetColumnSpan(_footer, 2);
 
-        Controls.Add(root);
+        usagePage.Controls.Add(root);
+        BuildSettingsPage(settingsPage, version);
+        Controls.Add(tabs);
         PlaceAtTopRight();
         Shown += (_, _) => StartServer();
         FormClosed += (_, _) =>
@@ -122,7 +182,157 @@ internal sealed class UsageForm : Form
             _server?.Dispose();
         };
         _poll.Tick += (_, _) => RefreshUsage();
+        ApplyRefreshInterval();
+    }
+
+    private static Button CreateTabButton(string text)
+    {
+        var button = new Button
+        {
+            Text = text,
+            Dock = DockStyle.Fill,
+            Margin = Padding.Empty,
+            FlatStyle = FlatStyle.Flat,
+            Font = new Font("Segoe UI Semibold", 9F, FontStyle.Bold),
+            Cursor = Cursors.Hand,
+            AccessibleRole = AccessibleRole.PageTab,
+            AccessibleName = $"{text} tab",
+        };
+        button.FlatAppearance.BorderSize = 0;
+        return button;
+    }
+
+    private void BuildSettingsPage(Panel page, string version)
+    {
+        var layout = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            Padding = new Padding(14),
+            ColumnCount = 1,
+            RowCount = 8,
+            BackColor = BackColor,
+        };
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        foreach (var height in new[] { 34, 12, 34, 30, 34, 44 })
+            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, height));
+        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 22));
+
+        layout.Controls.Add(new Label
+        {
+            Text = "Widget settings",
+            Dock = DockStyle.Fill,
+            Font = new Font("Segoe UI Semibold", 13F, FontStyle.Bold),
+            ForeColor = Color.White,
+            TextAlign = ContentAlignment.MiddleLeft,
+        }, 0, 0);
+
+        var alwaysOnTop = new CheckBox
+        {
+            Text = "Always on top",
+            Checked = _settings.AlwaysOnTop,
+            Dock = DockStyle.Fill,
+            ForeColor = ForeColor,
+            BackColor = BackColor,
+        };
+        layout.Controls.Add(alwaysOnTop, 0, 2);
+
+        layout.Controls.Add(new Label
+        {
+            Text = "Automatic refresh",
+            Dock = DockStyle.Fill,
+            ForeColor = ForeColor,
+            TextAlign = ContentAlignment.MiddleLeft,
+        }, 0, 3);
+
+        var refreshInterval = new ComboBox
+        {
+            DropDownStyle = ComboBoxStyle.DropDownList,
+            FlatStyle = FlatStyle.Flat,
+            DrawMode = DrawMode.OwnerDrawFixed,
+            Width = 180,
+            BackColor = Color.FromArgb(38, 41, 47),
+            ForeColor = ForeColor,
+        };
+        refreshInterval.DrawItem += (_, e) =>
+        {
+            if (e.Index < 0) return;
+            var selected = (e.State & DrawItemState.Selected) != 0;
+            using var background = new SolidBrush(selected ? Color.FromArgb(50, 55, 63) : refreshInterval.BackColor);
+            e.Graphics.FillRectangle(background, e.Bounds);
+            TextRenderer.DrawText(e.Graphics, refreshInterval.Items[e.Index]?.ToString() ?? string.Empty, refreshInterval.Font,
+                e.Bounds, refreshInterval.ForeColor, TextFormatFlags.Left | TextFormatFlags.VerticalCenter);
+        };
+        refreshInterval.Items.AddRange(new object[] { "Off", "Every minute", "Every 5 minutes", "Every 15 minutes" });
+        refreshInterval.SelectedIndex = _settings.RefreshMinutes switch { 0 => 0, 5 => 2, 15 => 3, _ => 1 };
+        layout.Controls.Add(refreshInterval, 0, 4);
+
+        var saveStatus = new Label
+        {
+            Text = "Changes save automatically.",
+            Dock = DockStyle.Fill,
+            ForeColor = Color.FromArgb(151, 158, 169),
+            TextAlign = ContentAlignment.MiddleLeft,
+        };
+        layout.Controls.Add(saveStatus, 0, 5);
+
+        layout.Controls.Add(new Label
+        {
+            Text = $"v{version}",
+            Dock = DockStyle.Fill,
+            TextAlign = ContentAlignment.MiddleCenter,
+            ForeColor = Color.FromArgb(125, 132, 143),
+            Font = new Font("Segoe UI", 8F),
+        }, 0, 7);
+
+        alwaysOnTop.CheckedChanged += (_, _) =>
+        {
+            _settings.AlwaysOnTop = alwaysOnTop.Checked;
+            TopMost = alwaysOnTop.Checked;
+            SaveSettings(saveStatus);
+        };
+        refreshInterval.SelectedIndexChanged += (_, _) =>
+        {
+            _settings.RefreshMinutes = refreshInterval.SelectedIndex switch { 0 => 0, 2 => 5, 3 => 15, _ => 1 };
+            ApplyRefreshInterval();
+            UpdateFooter(version);
+            SaveSettings(saveStatus);
+        };
+        page.Controls.Add(layout);
+    }
+
+    private void ApplyRefreshInterval()
+    {
+        _poll.Stop();
+        if (_settings.RefreshMinutes == 0) return;
+        _poll.Interval = _settings.RefreshMinutes * 60_000;
         _poll.Start();
+    }
+
+    private void UpdateFooter(string version)
+    {
+        var refreshText = _settings.RefreshMinutes switch
+        {
+            0 => "Scheduled refresh off",
+            1 => "Updates automatically every minute",
+            _ => $"Updates automatically every {_settings.RefreshMinutes} minutes",
+        };
+        _footer.Text = $"{refreshText} · v{version}";
+    }
+
+    private void SaveSettings(Label status)
+    {
+        try
+        {
+            _settings.Save();
+            status.Text = "Changes saved.";
+            status.ForeColor = Color.FromArgb(151, 158, 169);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            status.Text = "Could not save settings; changes last until close.";
+            status.ForeColor = Color.FromArgb(226, 95, 95);
+        }
     }
 
     protected override void OnHandleCreated(EventArgs e)
@@ -315,7 +525,8 @@ internal sealed class UsageForm : Form
         foreach (var row in rows.OrderBy(x => x.DurationMinutes == 0 ? int.MaxValue : x.DurationMinutes))
             _windows.Controls.Add(new UsageRow(row));
         _windows.ResumeLayout();
-        ClientSize = new Size(ClientSize.Width, Math.Max(378, 204 + rows.Count * 87));
+        ResizeUsageRows();
+        ClientSize = new Size(ClientSize.Width, Math.Max(410, 236 + rows.Count * 87));
         _status.Text = $"Updated {DateTime.Now:t} · {rows.Count} usage window{(rows.Count == 1 ? "" : "s")}";
     }
 
@@ -342,6 +553,12 @@ internal sealed class UsageForm : Form
             _ => bucketName,
         };
         rows.Add(new UsageWindow(label, bucketName, Math.Clamp(100 - used, 0, 100), duration, resets));
+    }
+
+    private void ResizeUsageRows()
+    {
+        foreach (Control row in _windows.Controls)
+            row.Width = Math.Max(1, _windows.ClientSize.Width - row.Margin.Horizontal);
     }
 
     private static string FormatDuration(int minutes)
@@ -397,6 +614,7 @@ internal sealed class UsageForm : Form
                 TextAlign = ContentAlignment.MiddleRight,
                 Location = new Point(214, 9),
                 Size = new Size(78, 18),
+                Anchor = AnchorStyles.Top | AnchorStyles.Right,
             };
             var color = usage.Remaining < 15 ? Color.FromArgb(226, 95, 95)
                 : usage.Remaining < 35 ? Color.FromArgb(230, 174, 82)
@@ -405,6 +623,7 @@ internal sealed class UsageForm : Form
             {
                 Location = new Point(12, 35),
                 Size = new Size(286, 9),
+                Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
                 Remaining = usage.Remaining,
                 FillColor = color,
             };
@@ -464,18 +683,23 @@ internal sealed class UsageForm : Form
             BackColor = Color.FromArgb(64, 70, 79);
         }
 
+        protected override void OnPaintBackground(PaintEventArgs e)
+        {
+            e.Graphics.Clear(Parent?.BackColor ?? SystemColors.Control);
+        }
+
         protected override void OnPaint(PaintEventArgs e)
         {
             e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
             var track = new Rectangle(0, 0, Width - 1, Height - 1);
-            using var trackPath = CreateRoundedPath(track, Height / 2f);
+            using var trackPath = CreateRoundedPath(track, track.Height / 2f);
             using var trackBrush = new SolidBrush(BackColor);
             e.Graphics.FillPath(trackBrush, trackPath);
 
             var fillWidth = (int)Math.Round((Width - 1) * Math.Clamp(Remaining, 0, 100) / 100d);
             if (fillWidth <= 0) return;
             var fill = new Rectangle(0, 0, fillWidth, Height - 1);
-            using var fillPath = CreateRoundedPath(fill, Math.Min(Height / 2f, fillWidth / 2f));
+            using var fillPath = CreateRoundedPath(fill, Math.Min(fill.Height / 2f, fill.Width / 2f));
             using var fillBrush = new SolidBrush(FillColor);
             e.Graphics.FillPath(fillBrush, fillPath);
         }
@@ -484,13 +708,44 @@ internal sealed class UsageForm : Form
     private static System.Drawing.Drawing2D.GraphicsPath CreateRoundedPath(Rectangle bounds, float radius)
     {
         var path = new System.Drawing.Drawing2D.GraphicsPath();
-        var diameter = Math.Max(1, (int)Math.Round(radius * 2));
+        var diameter = Math.Max(1, Math.Min(Math.Min(bounds.Width, bounds.Height), (int)Math.Round(radius * 2)));
         path.AddArc(bounds.X, bounds.Y, diameter, diameter, 180, 90);
         path.AddArc(bounds.Right - diameter, bounds.Y, diameter, diameter, 270, 90);
         path.AddArc(bounds.Right - diameter, bounds.Bottom - diameter, diameter, diameter, 0, 90);
         path.AddArc(bounds.X, bounds.Bottom - diameter, diameter, diameter, 90, 90);
         path.CloseFigure();
         return path;
+    }
+}
+
+internal sealed class WidgetSettings
+{
+    private static readonly string SettingsPath = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "CodexUsageWidget", "settings.json");
+
+    public bool AlwaysOnTop { get; set; } = true;
+    public int RefreshMinutes { get; set; } = 1;
+
+    public static WidgetSettings Load()
+    {
+        try
+        {
+            if (!File.Exists(SettingsPath)) return new WidgetSettings();
+            var settings = JsonSerializer.Deserialize<WidgetSettings>(File.ReadAllText(SettingsPath)) ?? new WidgetSettings();
+            if (settings.RefreshMinutes is not (0 or 1 or 5 or 15)) settings.RefreshMinutes = 1;
+            return settings;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
+        {
+            return new WidgetSettings();
+        }
+    }
+
+    public void Save()
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(SettingsPath)!);
+        File.WriteAllText(SettingsPath, JsonSerializer.Serialize(this, new JsonSerializerOptions { WriteIndented = true }));
     }
 }
 
@@ -539,7 +794,12 @@ internal sealed class AppServerClient : IDisposable
         _process.BeginErrorReadLine();
         Send("initialize", 1, new
         {
-            clientInfo = new { name = "codex_usage_widget", title = "Codex Usage Widget", version = "0.1.0" }
+            clientInfo = new
+            {
+                name = "codex_usage_widget",
+                title = "Codex Usage Widget",
+                version = typeof(AppServerClient).Assembly.GetName().Version?.ToString(3) ?? "unknown"
+            }
         });
     }
 

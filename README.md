@@ -1,6 +1,6 @@
 # Codex Usage Widget
 
-A small always-on-top Windows window for ChatGPT-plan usage limits reported by the local Codex App Server. It uses the standard Windows caption controls and rounded usage cards and progress tracks.
+A small Windows window for ChatGPT-plan usage limits reported by the local Codex App Server. It uses the standard Windows caption controls and rounded usage cards and progress tracks.
 
 ## Run
 
@@ -8,7 +8,9 @@ Build with the installed .NET 8 SDK, then run `bin\Release\net8.0-windows\CodexU
 
 The widget starts `codex.exe app-server` from the current Codex installation. If that app-server is not already signed in, choose **Connect with ChatGPT**; the widget opens the documented ChatGPT sign-in flow in your browser. Complete sign-in there. The widget does not read or store account tokens itself.
 
-Usage windows refresh when the server reports an update, when **Refresh** is clicked, and once per minute. The window stays on top and can be moved by its title bar. Closing the window stops its local app-server process.
+The **Usage** tab shows your limits. Usage windows refresh when the server reports an update, when **Refresh** is clicked, and on the configured schedule. In **Settings**, you can turn **Always on top** on or off and set automatic refresh to Off, 1, 5, or 15 minutes. Manual Refresh works even when scheduled refresh is off. Settings are saved in `%LOCALAPPDATA%\CodexUsageWidget\settings.json`; the defaults are always on top and one-minute refresh.
+
+The window can be moved by its title bar. Closing it stops its local app-server process.
 
 ## Notes
 
