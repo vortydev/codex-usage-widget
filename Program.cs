@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Drawing;
+using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Windows.Forms;
@@ -24,12 +25,15 @@ internal sealed class UsageForm : Form
     private readonly Button _connect = new();
     private readonly Button _refresh = new();
     private readonly System.Windows.Forms.Timer _poll = new() { Interval = 60_000 };
-    private readonly WidgetSettings _settings = WidgetSettings.Load();
+    private readonly WidgetSettings _settings;
+    private readonly string? _settingsPath;
     private AppServerClient? _server;
     private bool _connected;
 
-    public UsageForm()
+    public UsageForm(bool startServer = true, string? settingsPath = null)
     {
+        _settingsPath = settingsPath;
+        _settings = WidgetSettings.Load(settingsPath);
         Text = "Codex Usage";
         StartPosition = FormStartPosition.Manual;
         FormBorderStyle = FormBorderStyle.FixedSingle;
@@ -174,7 +178,7 @@ internal sealed class UsageForm : Form
         BuildSettingsPage(settingsPage, version);
         Controls.Add(tabs);
         PlaceAtTopRight();
-        Shown += (_, _) => StartServer();
+        if (startServer) Shown += (_, _) => StartServer();
         FormClosed += (_, _) =>
         {
             _poll.Stop();
@@ -209,11 +213,11 @@ internal sealed class UsageForm : Form
             Dock = DockStyle.Fill,
             Padding = new Padding(14),
             ColumnCount = 1,
-            RowCount = 8,
+            RowCount = 11,
             BackColor = BackColor,
         };
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        foreach (var height in new[] { 34, 12, 34, 30, 34, 44 })
+        foreach (var height in new[] { 34, 32, 24, 32, 24, 32, 32, 36, 42 })
             layout.RowStyles.Add(new RowStyle(SizeType.Absolute, height));
         layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 22));
@@ -235,7 +239,7 @@ internal sealed class UsageForm : Form
             ForeColor = ForeColor,
             BackColor = BackColor,
         };
-        layout.Controls.Add(alwaysOnTop, 0, 2);
+        layout.Controls.Add(alwaysOnTop, 0, 1);
 
         layout.Controls.Add(new Label
         {
@@ -243,7 +247,7 @@ internal sealed class UsageForm : Form
             Dock = DockStyle.Fill,
             ForeColor = ForeColor,
             TextAlign = ContentAlignment.MiddleLeft,
-        }, 0, 3);
+        }, 0, 2);
 
         var refreshInterval = new ComboBox
         {
@@ -265,16 +269,75 @@ internal sealed class UsageForm : Form
         };
         refreshInterval.Items.AddRange(new object[] { "Off", "Every minute", "Every 5 minutes", "Every 15 minutes" });
         refreshInterval.SelectedIndex = _settings.RefreshMinutes switch { 0 => 0, 5 => 2, 15 => 3, _ => 1 };
-        layout.Controls.Add(refreshInterval, 0, 4);
+        layout.Controls.Add(refreshInterval, 0, 3);
+
+        layout.Controls.Add(new Label
+        {
+            Text = "Colour thresholds · % remaining",
+            Dock = DockStyle.Fill,
+            ForeColor = ForeColor,
+            TextAlign = ContentAlignment.MiddleLeft,
+        }, 0, 4);
+
+        TextBox AddThresholdInput(string label, int value, int row)
+        {
+            var inputRow = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                Margin = Padding.Empty,
+                ColumnCount = 2,
+                RowCount = 1,
+            };
+            inputRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 65));
+            inputRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 35));
+            inputRow.Controls.Add(new Label
+            {
+                Text = label,
+                Dock = DockStyle.Fill,
+                TextAlign = ContentAlignment.MiddleLeft,
+                ForeColor = ForeColor,
+            }, 0, 0);
+            var input = new TextBox
+            {
+                Text = value.ToString(CultureInfo.InvariantCulture),
+                Dock = DockStyle.Fill,
+                BackColor = Color.FromArgb(38, 41, 47),
+                ForeColor = ForeColor,
+                BorderStyle = BorderStyle.FixedSingle,
+                AccessibleName = label,
+            };
+            inputRow.Controls.Add(input, 1, 0);
+            layout.Controls.Add(inputRow, 0, row);
+            return input;
+        }
+        var criticalThreshold = AddThresholdInput("Red below (%)", _settings.CriticalThresholdPercent, 5);
+        var warningThreshold = AddThresholdInput("Amber below (%)", _settings.WarningThresholdPercent, 6);
+        var applyThresholds = new Button { Text = "Apply thresholds", Size = new Size(150, 30) };
+        StyleButton(applyThresholds, primary: true);
+        layout.Controls.Add(applyThresholds, 0, 7);
 
         var saveStatus = new Label
         {
-            Text = "Changes save automatically.",
+            Text = "Other settings autosave. Thresholds need Apply.",
             Dock = DockStyle.Fill,
             ForeColor = Color.FromArgb(151, 158, 169),
             TextAlign = ContentAlignment.MiddleLeft,
         };
-        layout.Controls.Add(saveStatus, 0, 5);
+        layout.Controls.Add(saveStatus, 0, 8);
+
+        applyThresholds.Click += (_, _) =>
+        {
+            if (!WidgetSettings.TryParseThresholds(criticalThreshold.Text, warningThreshold.Text, out var critical, out var warning))
+            {
+                saveStatus.Text = "Use whole numbers: 0 ≤ red < amber ≤ 100.\nThresholds unchanged.";
+                saveStatus.ForeColor = Color.FromArgb(226, 95, 95);
+                return;
+            }
+            _settings.CriticalThresholdPercent = critical;
+            _settings.WarningThresholdPercent = warning;
+            foreach (var row in _windows.Controls.OfType<UsageRow>()) row.ApplyThresholds(_settings);
+            SaveSettings(saveStatus);
+        };
 
         layout.Controls.Add(new Label
         {
@@ -283,7 +346,7 @@ internal sealed class UsageForm : Form
             TextAlign = ContentAlignment.MiddleCenter,
             ForeColor = Color.FromArgb(125, 132, 143),
             Font = new Font("Segoe UI", 8F),
-        }, 0, 7);
+        }, 0, 10);
 
         alwaysOnTop.CheckedChanged += (_, _) =>
         {
@@ -324,7 +387,7 @@ internal sealed class UsageForm : Form
     {
         try
         {
-            _settings.Save();
+            _settings.Save(_settingsPath);
             status.Text = "Changes saved.";
             status.ForeColor = Color.FromArgb(151, 158, 169);
         }
@@ -522,11 +585,17 @@ internal sealed class UsageForm : Form
 
         _windows.SuspendLayout();
         _windows.Controls.Clear();
+        // Rows arrive after WinForms has scaled the form; match its logical layout scale.
+        var scale = _windows.Parent is TableLayoutPanel layout ? layout.RowStyles[0].Height / 34f : DeviceDpi / 96f;
         foreach (var row in rows.OrderBy(x => x.DurationMinutes == 0 ? int.MaxValue : x.DurationMinutes))
-            _windows.Controls.Add(new UsageRow(row));
+        {
+            var tile = new UsageRow(row, _settings);
+            if (scale != 1f) tile.Scale(new SizeF(scale, scale));
+            _windows.Controls.Add(tile);
+        }
         _windows.ResumeLayout();
         ResizeUsageRows();
-        ClientSize = new Size(ClientSize.Width, Math.Max(410, 236 + rows.Count * 87));
+        ClientSize = new Size(ClientSize.Width, (int)Math.Ceiling(Math.Max(410, 236 + rows.Count * 87) * scale));
         _status.Text = $"Updated {DateTime.Now:t} · {rows.Count} usage window{(rows.Count == 1 ? "" : "s")}";
     }
 
@@ -589,7 +658,9 @@ internal sealed class UsageForm : Form
 
     private sealed class UsageRow : RoundedCard
     {
-        public UsageRow(UsageWindow usage)
+        private readonly RoundedProgressBar _progress;
+
+        public UsageRow(UsageWindow usage, WidgetSettings settings)
         {
             Width = 310;
             Height = 78;
@@ -616,16 +687,13 @@ internal sealed class UsageForm : Form
                 Size = new Size(78, 18),
                 Anchor = AnchorStyles.Top | AnchorStyles.Right,
             };
-            var color = usage.Remaining < 15 ? Color.FromArgb(226, 95, 95)
-                : usage.Remaining < 35 ? Color.FromArgb(230, 174, 82)
-                : Color.FromArgb(42, 185, 160);
-            var progress = new RoundedProgressBar
+            _progress = new RoundedProgressBar
             {
                 Location = new Point(12, 35),
                 Size = new Size(286, 9),
                 Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
                 Remaining = usage.Remaining,
-                FillColor = color,
+                FillColor = settings.GetUsageColor(usage.Remaining),
             };
             var resetText = usage.ResetsAt is null
                 ? "Reset time unavailable"
@@ -643,8 +711,14 @@ internal sealed class UsageForm : Form
             };
             Controls.Add(header);
             Controls.Add(remaining);
-            Controls.Add(progress);
+            Controls.Add(_progress);
             Controls.Add(reset);
+        }
+
+        public void ApplyThresholds(WidgetSettings settings)
+        {
+            _progress.FillColor = settings.GetUsageColor(_progress.Remaining);
+            _progress.Invalidate();
         }
     }
 
@@ -726,15 +800,55 @@ internal sealed class WidgetSettings
 
     public bool AlwaysOnTop { get; set; } = true;
     public int RefreshMinutes { get; set; } = 1;
+    public int CriticalThresholdPercent { get; set; } = 15;
+    public int WarningThresholdPercent { get; set; } = 35;
 
-    public static WidgetSettings Load()
+    internal static bool ValidThresholds(int critical, int warning) => critical >= 0 && critical < warning && warning <= 100;
+
+    internal static bool TryParseThresholds(string criticalText, string warningText, out int critical, out int warning)
+    {
+        var criticalValid = int.TryParse(criticalText.Trim(), NumberStyles.None, CultureInfo.InvariantCulture, out critical);
+        var warningValid = int.TryParse(warningText.Trim(), NumberStyles.None, CultureInfo.InvariantCulture, out warning);
+        return criticalValid && warningValid && ValidThresholds(critical, warning);
+    }
+
+    internal Color GetUsageColor(double remaining) => remaining < CriticalThresholdPercent ? Color.FromArgb(226, 95, 95)
+        : remaining < WarningThresholdPercent ? Color.FromArgb(230, 174, 82)
+        : Color.FromArgb(42, 185, 160);
+
+    internal static WidgetSettings FromJson(string json)
+    {
+        using var document = JsonDocument.Parse(json);
+        var root = document.RootElement;
+        var settings = new WidgetSettings();
+        if (root.ValueKind != JsonValueKind.Object) return settings;
+        if (root.TryGetProperty(nameof(AlwaysOnTop), out var top) && top.ValueKind is JsonValueKind.True or JsonValueKind.False)
+            settings.AlwaysOnTop = top.GetBoolean();
+        if (root.TryGetProperty(nameof(RefreshMinutes), out var refresh) && refresh.ValueKind == JsonValueKind.Number &&
+            refresh.TryGetInt32(out var minutes) && minutes is 0 or 1 or 5 or 15)
+            settings.RefreshMinutes = minutes;
+
+        var critical = settings.CriticalThresholdPercent;
+        var warning = settings.WarningThresholdPercent;
+        var validCritical = !root.TryGetProperty(nameof(CriticalThresholdPercent), out var red) ||
+            (red.ValueKind == JsonValueKind.Number && red.TryGetInt32(out critical));
+        var validWarning = !root.TryGetProperty(nameof(WarningThresholdPercent), out var amber) ||
+            (amber.ValueKind == JsonValueKind.Number && amber.TryGetInt32(out warning));
+        if (validCritical && validWarning && ValidThresholds(critical, warning))
+        {
+            settings.CriticalThresholdPercent = critical;
+            settings.WarningThresholdPercent = warning;
+        }
+        return settings;
+    }
+
+    public static WidgetSettings Load(string? path = null)
     {
         try
         {
-            if (!File.Exists(SettingsPath)) return new WidgetSettings();
-            var settings = JsonSerializer.Deserialize<WidgetSettings>(File.ReadAllText(SettingsPath)) ?? new WidgetSettings();
-            if (settings.RefreshMinutes is not (0 or 1 or 5 or 15)) settings.RefreshMinutes = 1;
-            return settings;
+            path ??= SettingsPath;
+            if (!File.Exists(path)) return new WidgetSettings();
+            return FromJson(File.ReadAllText(path));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
         {
@@ -742,10 +856,11 @@ internal sealed class WidgetSettings
         }
     }
 
-    public void Save()
+    public void Save(string? path = null)
     {
-        Directory.CreateDirectory(Path.GetDirectoryName(SettingsPath)!);
-        File.WriteAllText(SettingsPath, JsonSerializer.Serialize(this, new JsonSerializerOptions { WriteIndented = true }));
+        path ??= SettingsPath;
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        File.WriteAllText(path, JsonSerializer.Serialize(this, new JsonSerializerOptions { WriteIndented = true }));
     }
 }
 

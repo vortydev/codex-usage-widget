@@ -47,7 +47,17 @@ The widget starts `codex.exe app-server` from the current Codex installation. If
 
 The **Usage** tab shows your limits. Usage windows refresh when the server reports an update, when **Refresh** is clicked, and on the configured schedule. In **Settings**, you can turn **Always on top** on or off and set automatic refresh to Off, 1, 5, or 15 minutes. Manual Refresh works even when scheduled refresh is off. Settings are saved in `%LOCALAPPDATA%\CodexUsageWidget\settings.json`; the defaults are always on top and one-minute refresh.
 
+Colour thresholds are shared by all usage tiles. In **Settings**, edit **Red below (%)** and **Amber below (%)**, then choose **Apply thresholds**. Values must be whole numbers with `0 ≤ red < amber ≤ 100`. Defaults are red below 15% remaining, amber below 35%, and teal at or above 35%; colours use the actual percentage rather than the rounded label. Invalid entries leave thresholds unchanged. Applying immediately recolours existing tiles without refreshing usage. Other settings still save automatically. Older settings files receive the defaults; invalid stored threshold pairs fall back to 15/35 without resetting unrelated settings. If saving fails, the app reports that changes only last until close.
+
 The window can be moved by its title bar. Closing it stops its local app-server process.
+
+## Checks
+
+Run dependency-free settings and UI regression checks on Windows:
+
+```powershell
+dotnet run --project .\tests\ThresholdTests.csproj --configuration Release
+```
 
 ## Notes
 

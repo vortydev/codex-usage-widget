@@ -1,16 +1,13 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <OutputType>WinExe</OutputType>
+    <OutputType>Exe</OutputType>
     <TargetFramework>net8.0-windows</TargetFramework>
     <UseWindowsForms>true</UseWindowsForms>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <AssemblyName>CodexUsageWidget</AssemblyName>
-    <RootNamespace>CodexUsageWidget</RootNamespace>
-    <ApplicationIcon>assets\codex-usage-hourglass.ico</ApplicationIcon>
-    <Version>0.1.5</Version>
+    <StartupObject>ThresholdTests</StartupObject>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Remove="tests\**\*.cs" />
+    <Compile Include="..\Program.cs" Link="Program.cs" />
   </ItemGroup>
 </Project>
