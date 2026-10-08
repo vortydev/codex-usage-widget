@@ -21,7 +21,7 @@ internal sealed class UsageForm : Form
 {
     private readonly Label _status = new();
     private readonly Label _footer = new();
-    private readonly FlowLayoutPanel _windows = new();
+    private readonly FlowLayoutPanel _windows = new BufferedFlowLayoutPanel();
     private readonly Button _connect = new();
     private readonly Button _refresh = new();
     private readonly System.Windows.Forms.Timer _poll = new() { Interval = 60_000 };
@@ -29,6 +29,7 @@ internal sealed class UsageForm : Form
     private readonly string? _settingsPath;
     private AppServerClient? _server;
     private bool _connected;
+    private int _appliedFontSize = 9;
 
     public UsageForm(bool startServer = true, string? settingsPath = null)
     {
@@ -36,21 +37,23 @@ internal sealed class UsageForm : Form
         _settings = WidgetSettings.Load(settingsPath);
         Text = "Codex Usage";
         StartPosition = FormStartPosition.Manual;
-        FormBorderStyle = FormBorderStyle.FixedSingle;
-        MinimumSize = new Size(380, 420);
+        AutoScaleDimensions = new SizeF(96F, 96F);
+        AutoScaleMode = AutoScaleMode.Dpi;
+        FormBorderStyle = FormBorderStyle.Sizable;
+        DoubleBuffered = true;
         ControlBox = true;
         MinimizeBox = true;
-        MaximizeBox = false;
+        MaximizeBox = true;
         ShowIcon = true;
         Icon = System.Drawing.Icon.ExtractAssociatedIcon(Application.ExecutablePath) ?? Icon;
         TopMost = _settings.AlwaysOnTop;
         ShowInTaskbar = true;
         BackColor = Color.FromArgb(25, 27, 31);
         ForeColor = Color.FromArgb(238, 240, 243);
-        ClientSize = new Size(360, 410);
+        ClientSize = new Size(380, 410);
         Font = new Font("Segoe UI", 9F);
 
-        var tabs = new TableLayoutPanel
+        var tabs = new BufferedTableLayoutPanel
         {
             Dock = DockStyle.Fill,
             ColumnCount = 1,
@@ -61,7 +64,7 @@ internal sealed class UsageForm : Form
         tabs.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
         tabs.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
 
-        var tabHeader = new TableLayoutPanel
+        var tabHeader = new BufferedTableLayoutPanel
         {
             Dock = DockStyle.Fill,
             ColumnCount = 2,
@@ -75,16 +78,16 @@ internal sealed class UsageForm : Form
         tabHeader.RowStyles.Add(new RowStyle(SizeType.Absolute, 3));
         var usageTab = CreateTabButton("Usage");
         var settingsTab = CreateTabButton("Settings");
-        var usageIndicator = new Panel { Dock = DockStyle.Fill, Margin = Padding.Empty };
-        var settingsIndicator = new Panel { Dock = DockStyle.Fill, Margin = Padding.Empty };
+        var usageIndicator = new BufferedPanel { Dock = DockStyle.Fill, Margin = Padding.Empty };
+        var settingsIndicator = new BufferedPanel { Dock = DockStyle.Fill, Margin = Padding.Empty };
         tabHeader.Controls.Add(usageTab, 0, 0);
         tabHeader.Controls.Add(settingsTab, 1, 0);
         tabHeader.Controls.Add(usageIndicator, 0, 1);
         tabHeader.Controls.Add(settingsIndicator, 1, 1);
 
-        var content = new Panel { Dock = DockStyle.Fill, BackColor = BackColor, Margin = Padding.Empty };
-        var usagePage = new Panel { Dock = DockStyle.Fill, BackColor = BackColor };
-        var settingsPage = new Panel { Dock = DockStyle.Fill, BackColor = BackColor };
+        var content = new BufferedPanel { Dock = DockStyle.Fill, BackColor = BackColor, Margin = Padding.Empty };
+        var usagePage = new BufferedPanel { Dock = DockStyle.Fill, BackColor = BackColor };
+        var settingsPage = new BufferedPanel { Dock = DockStyle.Fill, BackColor = BackColor };
         content.Controls.Add(usagePage);
         content.Controls.Add(settingsPage);
         void SelectTab(bool settings)
@@ -106,22 +109,23 @@ internal sealed class UsageForm : Form
         tabs.Controls.Add(tabHeader, 0, 0);
         tabs.Controls.Add(content, 0, 1);
 
-        var root = new TableLayoutPanel
+        var root = new BufferedTableLayoutPanel
         {
             Dock = DockStyle.Fill,
             BackColor = BackColor,
             Padding = new Padding(14),
             ColumnCount = 2,
-            RowCount = 6,
+            RowCount = 7,
         };
         root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         root.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 160));
+        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 24));
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 22));
+        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 
         var title = new Label
         {
@@ -135,14 +139,18 @@ internal sealed class UsageForm : Form
 
         _refresh.Text = "Refresh";
         StyleButton(_refresh, primary: true);
-        _refresh.Size = new Size(108, 30);
+        _refresh.AutoSize = true;
+        _refresh.MinimumSize = new Size(108, 30);
+        _refresh.Margin = new Padding(0, 8, 0, 0);
         _refresh.Text = "↻  Refresh";
         _refresh.Click += (_, _) => RefreshUsage();
         root.Controls.Add(_refresh, 0, 3);
         root.SetColumnSpan(_refresh, 2);
 
         _status.Text = "Starting local Codex connection…";
+        _status.AutoSize = true;
         _status.Dock = DockStyle.Fill;
+        _status.Margin = new Padding(0, 8, 0, 0);
         _status.TextAlign = ContentAlignment.MiddleLeft;
         _status.ForeColor = Color.FromArgb(175, 181, 191);
         root.Controls.Add(_status, 0, 2);
@@ -151,32 +159,54 @@ internal sealed class UsageForm : Form
         _windows.Dock = DockStyle.Fill;
         _windows.FlowDirection = FlowDirection.TopDown;
         _windows.WrapContents = false;
-        _windows.AutoScroll = false;
+        _windows.AutoScroll = true;
         _windows.BackColor = BackColor;
+        _windows.Margin = Padding.Empty;
         _windows.SizeChanged += (_, _) => ResizeUsageRows();
         root.Controls.Add(_windows, 0, 1);
         root.SetColumnSpan(_windows, 2);
 
         _connect.Text = "Connect with ChatGPT";
         StyleButton(_connect, primary: true);
+        _connect.AutoSize = true;
         _connect.Dock = DockStyle.Fill;
+        _connect.Margin = new Padding(0, 8, 0, 0);
         _connect.Visible = false;
         _connect.Click += (_, _) => ConnectWithChatGpt();
         root.Controls.Add(_connect, 0, 4);
         root.SetColumnSpan(_connect, 2);
 
         var version = typeof(UsageForm).Assembly.GetName().Version?.ToString(3) ?? "unknown";
+        _footer.AutoSize = true;
         _footer.Dock = DockStyle.Fill;
+        _footer.Margin = new Padding(0, 8, 0, 0);
         _footer.TextAlign = ContentAlignment.MiddleCenter;
         _footer.ForeColor = Color.FromArgb(125, 132, 143);
         _footer.Font = new Font("Segoe UI", 8F);
         UpdateFooter(version);
-        root.Controls.Add(_footer, 0, 5);
+        root.Controls.Add(_footer, 0, 6);
         root.SetColumnSpan(_footer, 2);
 
+        root.Layout += (_, _) =>
+        {
+            var cardsHeight = _windows.Controls.Cast<Control>().Sum(card => card.Height + card.Margin.Vertical);
+            var reserved = root.Padding.Vertical + root.RowStyles[0].Height +
+                _status.PreferredHeight + _status.Margin.Vertical + _refresh.PreferredSize.Height + _refresh.Margin.Vertical +
+                (_connect.Visible ? _connect.PreferredSize.Height + _connect.Margin.Vertical : 0) +
+                _footer.PreferredHeight + _footer.Margin.Vertical;
+            var height = Math.Max(0, Math.Min(cardsHeight, root.ClientSize.Height - reserved));
+            if (Math.Abs(root.RowStyles[1].Height - height) > 1) root.RowStyles[1].Height = height;
+        };
+        _windows.Layout += (_, _) => { ResizeUsageRows(); root.PerformLayout(); };
+        _connect.VisibleChanged += (_, _) => root.PerformLayout();
         usagePage.Controls.Add(root);
         BuildSettingsPage(settingsPage, version);
         Controls.Add(tabs);
+        ApplyFontSize();
+        var settingsLayout = (TableLayoutPanel)settingsPage.Controls[0];
+        var preferred = settingsLayout.GetPreferredSize(new Size(ClientSize.Width, 0));
+        MinimumSize = SizeFromClientSize(new Size(ClientSize.Width, preferred.Height + 34));
+        ClientSize = new Size(ClientSize.Width, Math.Max(preferred.Height + 34, 350));
         PlaceAtTopRight();
         if (startServer) Shown += (_, _) => StartServer();
         FormClosed += (_, _) =>
@@ -208,23 +238,24 @@ internal sealed class UsageForm : Form
 
     private void BuildSettingsPage(Panel page, string version)
     {
-        var layout = new TableLayoutPanel
+        var layout = new BufferedTableLayoutPanel
         {
             Dock = DockStyle.Fill,
             Padding = new Padding(14),
-            ColumnCount = 1,
+            ColumnCount = 2,
             RowCount = 11,
             BackColor = BackColor,
         };
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        foreach (var height in new[] { 34, 32, 24, 32, 24, 32, 32, 36, 42 })
-            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, height));
+        for (var row = 0; row < 9; row++) layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 22));
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 
         layout.Controls.Add(new Label
         {
             Text = "Widget settings",
+            AutoSize = true,
             Dock = DockStyle.Fill,
             Font = new Font("Segoe UI Semibold", 13F, FontStyle.Bold),
             ForeColor = Color.White,
@@ -233,6 +264,7 @@ internal sealed class UsageForm : Form
 
         var alwaysOnTop = new CheckBox
         {
+            AutoSize = true,
             Text = "Always on top",
             Checked = _settings.AlwaysOnTop,
             Dock = DockStyle.Fill,
@@ -243,6 +275,7 @@ internal sealed class UsageForm : Form
 
         layout.Controls.Add(new Label
         {
+            AutoSize = true,
             Text = "Automatic refresh",
             Dock = DockStyle.Fill,
             ForeColor = ForeColor,
@@ -254,7 +287,7 @@ internal sealed class UsageForm : Form
             DropDownStyle = ComboBoxStyle.DropDownList,
             FlatStyle = FlatStyle.Flat,
             DrawMode = DrawMode.OwnerDrawFixed,
-            Width = 180,
+            Dock = DockStyle.Fill,
             BackColor = Color.FromArgb(38, 41, 47),
             ForeColor = ForeColor,
         };
@@ -269,34 +302,24 @@ internal sealed class UsageForm : Form
         };
         refreshInterval.Items.AddRange(new object[] { "Off", "Every minute", "Every 5 minutes", "Every 15 minutes" });
         refreshInterval.SelectedIndex = _settings.RefreshMinutes switch { 0 => 0, 5 => 2, 15 => 3, _ => 1 };
-        layout.Controls.Add(refreshInterval, 0, 3);
+        layout.Controls.Add(refreshInterval, 1, 2);
 
         layout.Controls.Add(new Label
         {
+            AutoSize = true,
             Text = "Colour thresholds · % remaining",
             Dock = DockStyle.Fill,
             ForeColor = ForeColor,
             TextAlign = ContentAlignment.MiddleLeft,
-        }, 0, 4);
+        }, 0, 3);
 
         TextBox AddThresholdInput(string label, int value, int row)
         {
-            var inputRow = new TableLayoutPanel
+            layout.Controls.Add(new Label
             {
-                Dock = DockStyle.Fill,
-                Margin = Padding.Empty,
-                ColumnCount = 2,
-                RowCount = 1,
-            };
-            inputRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 65));
-            inputRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 35));
-            inputRow.Controls.Add(new Label
-            {
-                Text = label,
-                Dock = DockStyle.Fill,
-                TextAlign = ContentAlignment.MiddleLeft,
-                ForeColor = ForeColor,
-            }, 0, 0);
+                Text = label, AutoSize = true, Dock = DockStyle.Fill,
+                TextAlign = ContentAlignment.MiddleLeft, ForeColor = ForeColor,
+            }, 0, row);
             var input = new TextBox
             {
                 Text = value.ToString(CultureInfo.InvariantCulture),
@@ -306,24 +329,24 @@ internal sealed class UsageForm : Form
                 BorderStyle = BorderStyle.FixedSingle,
                 AccessibleName = label,
             };
-            inputRow.Controls.Add(input, 1, 0);
-            layout.Controls.Add(inputRow, 0, row);
+            layout.Controls.Add(input, 1, row);
             return input;
         }
-        var criticalThreshold = AddThresholdInput("Red below (%)", _settings.CriticalThresholdPercent, 5);
-        var warningThreshold = AddThresholdInput("Amber below (%)", _settings.WarningThresholdPercent, 6);
-        var applyThresholds = new Button { Text = "Apply thresholds", Size = new Size(150, 30) };
+        var criticalThreshold = AddThresholdInput("Red below (%)", _settings.CriticalThresholdPercent, 4);
+        var warningThreshold = AddThresholdInput("Amber below (%)", _settings.WarningThresholdPercent, 5);
+        var applyThresholds = new Button { Text = "Apply thresholds", AutoSize = true, MinimumSize = new Size(150, 30) };
         StyleButton(applyThresholds, primary: true);
-        layout.Controls.Add(applyThresholds, 0, 7);
+        layout.Controls.Add(applyThresholds, 1, 6);
 
         var saveStatus = new Label
         {
+            AutoSize = true,
             Text = "Other settings autosave. Thresholds need Apply.",
             Dock = DockStyle.Fill,
             ForeColor = Color.FromArgb(151, 158, 169),
             TextAlign = ContentAlignment.MiddleLeft,
         };
-        layout.Controls.Add(saveStatus, 0, 8);
+        layout.Controls.Add(saveStatus, 0, 7);
 
         applyThresholds.Click += (_, _) =>
         {
@@ -341,12 +364,36 @@ internal sealed class UsageForm : Form
 
         layout.Controls.Add(new Label
         {
+            AutoSize = true,
             Text = $"v{version}",
             Dock = DockStyle.Fill,
             TextAlign = ContentAlignment.MiddleCenter,
             ForeColor = Color.FromArgb(125, 132, 143),
             Font = new Font("Segoe UI", 8F),
         }, 0, 10);
+
+        var fontLabel = new Label
+        {
+            AutoSize = true,
+            Text = $"Font size: {_settings.FontSize} pt",
+            Dock = DockStyle.Fill,
+            TextAlign = ContentAlignment.MiddleLeft,
+        };
+        var fontSize = new TrackBar
+        {
+            Minimum = 9, Maximum = 14, Value = _settings.FontSize,
+            TickFrequency = 1, Dock = DockStyle.Fill,
+            AccessibleName = "Font size",
+        };
+        layout.Controls.Add(fontLabel, 0, 8);
+        layout.Controls.Add(fontSize, 1, 8);
+        fontSize.ValueChanged += (_, _) =>
+        {
+            _settings.FontSize = fontSize.Value;
+            fontLabel.Text = $"Font size: {fontSize.Value} pt";
+            ApplyFontSize();
+            SaveSettings(saveStatus);
+        };
 
         alwaysOnTop.CheckedChanged += (_, _) =>
         {
@@ -361,7 +408,36 @@ internal sealed class UsageForm : Form
             UpdateFooter(version);
             SaveSettings(saveStatus);
         };
+        foreach (Control control in layout.Controls)
+        {
+            if (layout.GetRow(control) is 0 or 3 or 7 or 10) layout.SetColumnSpan(control, 2);
+            control.Margin = new Padding(3, 4, 3, 4);
+        }
         page.Controls.Add(layout);
+    }
+
+    private static IEnumerable<Control> Descendants(Control parent)
+    {
+        foreach (Control child in parent.Controls)
+        {
+            yield return child;
+            foreach (var nested in Descendants(child)) yield return nested;
+        }
+    }
+
+    private void ApplyFontSize()
+    {
+        if (_appliedFontSize == _settings.FontSize) return;
+        var ratio = (float)_settings.FontSize / _appliedFontSize;
+        var fonts = Descendants(this).Prepend(this)
+            .Select(control => (Control: control, Font: control.Font)).ToArray();
+        foreach (var item in fonts) item.Control.SuspendLayout();
+        Scale(new SizeF(ratio, ratio));
+        foreach (var item in fonts)
+            item.Control.Font = new Font(item.Font.FontFamily, item.Font.SizeInPoints * ratio, item.Font.Style);
+        _appliedFontSize = _settings.FontSize;
+        foreach (var item in fonts.Reverse()) item.Control.ResumeLayout(true);
+        ResizeUsageRows();
     }
 
     private void ApplyRefreshInterval()
@@ -578,24 +654,30 @@ internal sealed class UsageForm : Form
 
         if (rows.Count == 0)
         {
-            _windows.Controls.Clear();
+            foreach (Control old in _windows.Controls.Cast<Control>().ToArray()) old.Dispose();
             _status.Text = "Usage data isn’t available yet. Try Refresh.";
             return;
         }
 
         _windows.SuspendLayout();
-        _windows.Controls.Clear();
+        foreach (Control old in _windows.Controls.Cast<Control>().ToArray()) old.Dispose();
         // Rows arrive after WinForms has scaled the form; match its logical layout scale.
         var scale = _windows.Parent is TableLayoutPanel layout ? layout.RowStyles[0].Height / 34f : DeviceDpi / 96f;
         foreach (var row in rows.OrderBy(x => x.DurationMinutes == 0 ? int.MaxValue : x.DurationMinutes))
         {
             var tile = new UsageRow(row, _settings);
+            tile.Font = Font;
             if (scale != 1f) tile.Scale(new SizeF(scale, scale));
+            foreach (var label in Descendants(tile).OfType<Label>())
+                label.Font = new Font(label.Font.FontFamily, label.Font.SizeInPoints * _settings.FontSize / 9f, label.Font.Style);
             _windows.Controls.Add(tile);
         }
-        _windows.ResumeLayout();
+        var lastTile = _windows.Controls[_windows.Controls.Count - 1];
+        lastTile.Margin = new Padding(lastTile.Margin.Left, lastTile.Margin.Top, lastTile.Margin.Right, 0);
+        _windows.ResumeLayout(true);
+        _windows.Parent?.PerformLayout();
         ResizeUsageRows();
-        ClientSize = new Size(ClientSize.Width, (int)Math.Ceiling(Math.Max(410, 236 + rows.Count * 87) * scale));
+        _windows.PerformLayout();
         _status.Text = $"Updated {DateTime.Now:t} · {rows.Count} usage window{(rows.Count == 1 ? "" : "s")}";
     }
 
@@ -627,7 +709,10 @@ internal sealed class UsageForm : Form
     private void ResizeUsageRows()
     {
         foreach (Control row in _windows.Controls)
-            row.Width = Math.Max(1, _windows.ClientSize.Width - row.Margin.Horizontal);
+        {
+            var width = Math.Max(1, _windows.ClientSize.Width - row.Margin.Horizontal - _windows.Padding.Horizontal);
+            if (row.Width != width) row.Width = width;
+        }
     }
 
     private static string FormatDuration(int minutes)
@@ -652,6 +737,21 @@ internal sealed class UsageForm : Form
         if (IsDisposed) return;
         if (InvokeRequired) BeginInvoke(action);
         else action();
+    }
+
+    private sealed class BufferedTableLayoutPanel : TableLayoutPanel
+    {
+        public BufferedTableLayoutPanel() => DoubleBuffered = true;
+    }
+
+    private sealed class BufferedFlowLayoutPanel : FlowLayoutPanel
+    {
+        public BufferedFlowLayoutPanel() => DoubleBuffered = true;
+    }
+
+    private sealed class BufferedPanel : Panel
+    {
+        public BufferedPanel() => DoubleBuffered = true;
     }
 
     private sealed record UsageWindow(string Label, string Bucket, double Remaining, int DurationMinutes, DateTimeOffset? ResetsAt);
@@ -679,6 +779,7 @@ internal sealed class UsageForm : Form
             };
             var remaining = new Label
             {
+                Font = new Font("Segoe UI", 9F),
                 Text = $"{Math.Round(usage.Remaining):0}% left",
                 ForeColor = Color.FromArgb(206, 211, 220),
                 BackColor = Color.Transparent,
@@ -709,10 +810,35 @@ internal sealed class UsageForm : Form
                 Location = new Point(12, 53),
                 AutoSize = true,
             };
-            Controls.Add(header);
-            Controls.Add(remaining);
-            Controls.Add(_progress);
-            Controls.Add(reset);
+            var layout = new BufferedTableLayoutPanel
+            {
+                Dock = DockStyle.Fill, Padding = new Padding(12, 10, 12, 10),
+                ColumnCount = 2, RowCount = 3, BackColor = Color.Transparent,
+            };
+            layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            layout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 18));
+            layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            header.AutoSize = true;
+            header.Dock = DockStyle.Fill;
+            remaining.AutoSize = true;
+            remaining.Dock = DockStyle.Fill;
+            reset.Dock = DockStyle.Fill;
+            _progress.Dock = DockStyle.Fill;
+            _progress.Margin = new Padding(0, 4, 0, 5);
+            layout.Controls.Add(header, 0, 0);
+            layout.Controls.Add(remaining, 1, 0);
+            layout.Controls.Add(_progress, 0, 1);
+            layout.SetColumnSpan(_progress, 2);
+            layout.Controls.Add(reset, 0, 2);
+            layout.SetColumnSpan(reset, 2);
+            Controls.Add(layout);
+            layout.Layout += (_, _) =>
+            {
+                var height = layout.GetPreferredSize(new Size(Width, 0)).Height;
+                if (height > 0 && Height != height) Height = height;
+            };
         }
 
         public void ApplyThresholds(WidgetSettings settings)
@@ -759,12 +885,15 @@ internal sealed class UsageForm : Form
 
         protected override void OnPaintBackground(PaintEventArgs e)
         {
-            e.Graphics.Clear(Parent?.BackColor ?? SystemColors.Control);
+            Control? background = Parent;
+            while (background is not null && background.BackColor.A < 255) background = background.Parent;
+            e.Graphics.Clear(background?.BackColor ?? Color.FromArgb(35, 39, 46));
         }
 
         protected override void OnPaint(PaintEventArgs e)
         {
             e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+            if (Width < 2 || Height < 2) return;
             var track = new Rectangle(0, 0, Width - 1, Height - 1);
             using var trackPath = CreateRoundedPath(track, track.Height / 2f);
             using var trackBrush = new SolidBrush(BackColor);
@@ -775,7 +904,10 @@ internal sealed class UsageForm : Form
             var fill = new Rectangle(0, 0, fillWidth, Height - 1);
             using var fillPath = CreateRoundedPath(fill, Math.Min(fill.Height / 2f, fill.Width / 2f));
             using var fillBrush = new SolidBrush(FillColor);
+            var state = e.Graphics.Save();
+            e.Graphics.SetClip(trackPath);
             e.Graphics.FillPath(fillBrush, fillPath);
+            e.Graphics.Restore(state);
         }
     }
 
@@ -800,6 +932,7 @@ internal sealed class WidgetSettings
 
     public bool AlwaysOnTop { get; set; } = true;
     public int RefreshMinutes { get; set; } = 1;
+    public int FontSize { get; set; } = 9;
     public int CriticalThresholdPercent { get; set; } = 15;
     public int WarningThresholdPercent { get; set; } = 35;
 
@@ -827,6 +960,10 @@ internal sealed class WidgetSettings
         if (root.TryGetProperty(nameof(RefreshMinutes), out var refresh) && refresh.ValueKind == JsonValueKind.Number &&
             refresh.TryGetInt32(out var minutes) && minutes is 0 or 1 or 5 or 15)
             settings.RefreshMinutes = minutes;
+
+        if (root.TryGetProperty(nameof(FontSize), out var font) && font.ValueKind == JsonValueKind.Number &&
+            font.TryGetInt32(out var points) && points is >= 9 and <= 14)
+            settings.FontSize = points;
 
         var critical = settings.CriticalThresholdPercent;
         var warning = settings.WarningThresholdPercent;

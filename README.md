@@ -49,7 +49,7 @@ The **Usage** tab shows your limits. Usage windows refresh when the server repor
 
 Colour thresholds are shared by all usage tiles. In **Settings**, edit **Red below (%)** and **Amber below (%)**, then choose **Apply thresholds**. Values must be whole numbers with `0 ≤ red < amber ≤ 100`. Defaults are red below 15% remaining, amber below 35%, and teal at or above 35%; colours use the actual percentage rather than the rounded label. Invalid entries leave thresholds unchanged. Applying immediately recolours existing tiles without refreshing usage. Other settings still save automatically. Older settings files receive the defaults; invalid stored threshold pairs fall back to 15/35 without resetting unrelated settings. If saving fails, the app reports that changes only last until close.
 
-The window can be moved by its title bar. Closing it stops its local app-server process.
+The window can be moved by its title bar and resized by dragging its edges. Windows display scaling is applied per monitor. In **Settings**, the **Font size** slider adjusts text from 9 to 14 pt and saves automatically; spacing grows with the text. Usage refreshes preserve the current window size, and additional usage cards can be scrolled. Closing it stops its local app-server process.
 
 ## Checks
 

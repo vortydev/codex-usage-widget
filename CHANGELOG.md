@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.6
+
+- Allow window resizing and maximizing, with per-monitor DPI scaling and a saved 9–14 pt font-size slider.
+- Align Settings labels and inputs in a two-column grid and compact the usage status and action spacing.
+- Balance card content padding and fix gauge gutters while preserving rounded cards and tracks.
+- Buffer layout containers to reduce resize flashing and keep overflowing cards scrolling vertically.
+- Preserve window size during usage refreshes and extend layout and painting regression coverage.
+
 ## 0.1.5
 
 - Add shared red and amber percentage thresholds in Settings with an Apply button and inline validation.
