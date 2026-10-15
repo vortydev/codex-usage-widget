@@ -17,6 +17,8 @@ internal static class ThresholdTests
     private static void Main()
     {
         ApplicationConfiguration.Initialize();
+        UpdateTests.Run(Check);
+        SetupTests.Run(Check);
         Check(WidgetSettings.FromJson("{\"FontSize\":14}").FontSize == 14, "Stored font size");
         Check(WidgetSettings.FromJson("{\"FontSize\":99}").FontSize == 9, "Invalid font size defaults");
         var defaults = new WidgetSettings();
@@ -72,6 +74,7 @@ internal static class ThresholdTests
             File.WriteAllText(path, "not json");
             Check(WidgetSettings.Load(path).WarningThresholdPercent == 35, "Malformed JSON defaults");
 
+            TestUpdateLifecycle(directory);
             foreach (var scale in new[] { 1f, 1.5f, 2f }) TestLayout(scale, directory);
         }
         finally { Directory.Delete(directory, recursive: true); }
@@ -90,10 +93,68 @@ internal static class ThresholdTests
     private static void Click(Button button) => typeof(Button).GetMethod("OnClick", BindingFlags.Instance | BindingFlags.NonPublic)!
         .Invoke(button, new object[] { EventArgs.Empty });
 
+    private static void TestUpdateLifecycle(string directory)
+    {
+        var pending = new TaskCompletionSource<System.Net.Http.HttpResponseMessage>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var handler = new UpdateTests.Handler { Respond = (_, _) => pending.Task };
+        var path = Path.Combine(directory, "update-settings.json");
+        new WidgetSettings().Save(path);
+        var saved = File.ReadAllText(path);
+        using (var form = new UsageForm(false, path, new UpdateChecker(handler)))
+        {
+            form.ShowInTaskbar = false;
+            form.TopMost = false;
+            form.Location = new Point(-20000, -20000);
+            form.Show();
+            Click(Descendants(form).OfType<Button>().Single(x => x.Text == "Settings"));
+            var button = Descendants(form).OfType<Button>().Single(x => x.Text == "Check for updates");
+            Click(button);
+            Click(button);
+            Check(handler.Calls == 1 && !button.Enabled, "Pending request prevents duplicate checks");
+            pending.SetResult(new System.Net.Http.HttpResponseMessage(System.Net.HttpStatusCode.OK)
+            { Content = new System.Net.Http.StringContent(UpdateTests.Release("9.9.9")) });
+            var deadline = DateTime.UtcNow.AddSeconds(5);
+            while (!button.Enabled && DateTime.UtcNow < deadline) Application.DoEvents();
+            Check(button.Enabled && Descendants(form).OfType<LinkLabel>().Any(x => x.Visible), "Successful request restores button");
+            handler.Respond = (_, _) => throw new System.Net.Http.HttpRequestException("offline");
+            Click(button);
+            deadline = DateTime.UtcNow.AddSeconds(5);
+            while (!button.Enabled && DateTime.UtcNow < deadline) Application.DoEvents();
+            Check(button.Enabled && Descendants(form).OfType<LinkLabel>().All(x => !x.Visible), "Failed recheck clears stale download link");
+            Check(File.ReadAllText(path) == saved, "Update checks do not rewrite settings");
+            form.Close();
+        }
+        var cancelled = false;
+        var closingHandler = new UpdateTests.Handler
+        {
+            Respond = async (_, token) =>
+            {
+                using var registration = token.Register(() => cancelled = true);
+                await Task.Delay(Timeout.Infinite, token);
+                throw new InvalidOperationException("Expected cancellation");
+            },
+        };
+        using var closing = new UsageForm(false, path, new UpdateChecker(closingHandler));
+        closing.ShowInTaskbar = false;
+        closing.TopMost = false;
+        closing.Location = new Point(-20000, -20000);
+        closing.Show();
+        Click(Descendants(closing).OfType<Button>().Single(x => x.Text == "Settings"));
+        Click(Descendants(closing).OfType<Button>().Single(x => x.Text == "Check for updates"));
+        closing.Close();
+        Application.DoEvents();
+        Check(cancelled, "Closing cancels the in-flight request");
+    }
+
     private static void TestLayout(float scale, string directory)
     {
         var settingsPath = Path.Combine(directory, $"ui-settings-{scale}.json");
-        using var form = new UsageForm(startServer: false, settingsPath: settingsPath);
+        var updateHandler = new UpdateTests.Handler
+        {
+            Respond = (_, _) => Task.FromResult(new System.Net.Http.HttpResponseMessage(System.Net.HttpStatusCode.OK)
+            { Content = new System.Net.Http.StringContent(UpdateTests.Release("255.255.65535")) }),
+        };
+        using var form = new UsageForm(startServer: false, settingsPath: settingsPath, updateChecker: new UpdateChecker(updateHandler));
         form.ShowInTaskbar = false;
         form.TopMost = false;
         form.Location = new Point(-20000, -20000);
@@ -136,6 +197,15 @@ internal static class ThresholdTests
         typeof(UsageForm).GetMethod("RenderRateLimits", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(form, new object[] { data.RootElement });
         var status = (Label)typeof(UsageForm).GetField("_status", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(form)!;
         var timestamp = status.Text;
+        var updateButton = Descendants(form).OfType<Button>().Single(x => x.Text == "Check for updates");
+        Check(updateHandler.Calls == 0, "No automatic update request");
+        Click(updateButton);
+        var deadline = DateTime.UtcNow.AddSeconds(5);
+        while (!updateButton.Enabled && DateTime.UtcNow < deadline) Application.DoEvents();
+        Check(updateButton.Enabled && updateHandler.Calls == 1, "Manual update completes");
+        var download = Descendants(form).OfType<LinkLabel>().Single(x => x.Text == "Download installer");
+        Check(download.Visible && status.Text == timestamp, "Download offered without refreshing usage");
+        Check(download.Right <= download.Parent!.ClientSize.Width, $"Update actions fit at {scale}");
         var windowSize = form.Size;
         typeof(UsageForm).GetMethod("RenderRateLimits", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(form, new object[] { data.RootElement });
         Check(form.Size == windowSize, "Refresh preserves window size");
@@ -175,6 +245,9 @@ internal static class ThresholdTests
             Check(labels.All(label => label.Height >= TextRenderer.MeasureText(label.Text, label.Font).Height), $"Card text fits at maximum font size {scale}");
         }
         Click(settings);
+        foreach (var control in inputs.Cast<Control>().Append(apply).Append(updateButton).Append(download))
+            Check(control.Bottom <= control.Parent!.ClientSize.Height && control.Right <= control.Parent.ClientSize.Width,
+                $"Settings bounds at maximum font size {scale}: {control.Text}");
         using (var largeSettings = new Bitmap(form.Width, form.Height))
         {
             form.DrawToBitmap(largeSettings, new Rectangle(Point.Empty, largeSettings.Size));

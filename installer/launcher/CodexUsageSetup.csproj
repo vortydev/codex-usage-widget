@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AssemblyName>CodexUsageSetup</AssemblyName>
+    <Version>$(WidgetVersion)</Version>
+    <ApplicationIcon>..\..\assets\codex-usage-hourglass.ico</ApplicationIcon>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="..\..\UpdateChecker.cs" Link="UpdateChecker.cs" />
+  </ItemGroup>
+  <Target Name="RequireVersion" BeforeTargets="BeforeBuild">
+    <Error Condition="'$(WidgetVersion)' == ''" Text="Pass -p:WidgetVersion from CodexUsageWidget.csproj, or run build-installer.ps1." />
+  </Target>
+</Project>

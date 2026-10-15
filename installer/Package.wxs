@@ -1,0 +1,75 @@
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <Package Id="vortydev.CodexUsageWidget" Name="Codex Usage Widget" Manufacturer="vortydev"
+           Version="$(WidgetVersion)" ProductCode="$(WidgetProductCode)" Language="1033" Scope="perUser">
+    <MajorUpgrade DowngradeErrorMessage="A newer version of Codex Usage Widget is already installed."
+                  Schedule="afterInstallInitialize" />
+    <MediaTemplate EmbedCab="yes" CompressionLevel="high" />
+    <!-- MSI's WindowsBuild can report a compatibility build on newer Windows. -->
+    <Property Id="WINDOWSBUILDNUMBER" Secure="yes">
+      <RegistrySearch Id="WindowsBuildNumberSearch" Root="HKLM"
+                      Key="SOFTWARE\Microsoft\Windows NT\CurrentVersion"
+                      Name="CurrentBuildNumber" Type="raw" />
+    </Property>
+    <Launch Condition="Installed OR (VersionNT64 AND WINDOWSBUILDNUMBER &gt;= 10240)"
+            Message="Codex Usage Widget requires Windows 10 or Windows 11 on a 64-bit PC." />
+    <Launch Condition="NOT ALLUSERS" Message="Codex Usage Widget must be installed for the current user only." />
+    <Icon Id="WidgetIcon" SourceFile="..\assets\codex-usage-hourglass.ico" />
+    <Property Id="ARPPRODUCTICON" Value="WidgetIcon" />
+    <Property Id="ARPURLINFOABOUT" Value="https://github.com/vortydev/codex-usage-widget" />
+    <Property Id="ARPNOMODIFY" Value="1" />
+    <Property Id="MSIRESTARTMANAGERCONTROL" Value="DisableShutdown" />
+    <Property Id="MsiLogging" Value="voicewarmup!" />
+    <Property Id="WIXUI_INSTALLDIR" Value="INSTALLFOLDER" />
+    <!-- Capture the previous path before upgrade removal deletes its registry values. -->
+    <Property Id="PREVIOUSINSTALLFOLDER" Secure="yes">
+      <RegistrySearch Id="PreviousInstallFolderSearch" Root="HKCU"
+                      Key="Software\vortydev\CodexUsageWidget\Installer" Name="InstallFolder" Type="raw" />
+    </Property>
+    <SetProperty Id="INSTALLFOLDER" Value="[PREVIOUSINSTALLFOLDER]" Before="CostFinalize"
+                 Sequence="both" Condition="PREVIOUSINSTALLFOLDER" />
+    <StandardDirectory Id="SystemFolder" />
+    <!-- Explicit log button only; no shell, scripts, elevated execution or install side effects. -->
+    <CustomAction Id="OpenInstallerLog" Directory="SystemFolder" ExeCommand="notepad.exe &quot;[MsiLogFileLocation]&quot;"
+                  Execute="immediate" Return="asyncNoWait" />
+    <StandardDirectory Id="LocalAppDataFolder">
+      <Directory Id="ProgramsDirectory" Name="Programs">
+        <Directory Id="INSTALLFOLDER" Name="CodexUsageWidget" />
+      </Directory>
+    </StandardDirectory>
+    <DirectoryRef Id="INSTALLFOLDER">
+      <Component Id="InstallationIdentity" Guid="*">
+        <RegistryValue Root="HKCU" Key="Software\vortydev\CodexUsageWidget\Installer"
+                       Name="ProductCode" Value="[ProductCode]" Type="string" KeyPath="yes" />
+        <RegistryValue Root="HKCU" Key="Software\vortydev\CodexUsageWidget\Installer"
+                       Name="Version" Value="[ProductVersion]" Type="string" />
+        <RegistryValue Root="HKCU" Key="Software\vortydev\CodexUsageWidget\Installer"
+                       Name="InstallFolder" Value="[INSTALLFOLDER]" Type="string" />
+      </Component>
+    </DirectoryRef>
+    <StandardDirectory Id="ProgramMenuFolder">
+      <Component Id="StartMenuShortcut" Guid="*">
+        <Shortcut Id="WidgetShortcut" Name="Codex Usage Widget" Target="[INSTALLFOLDER]CodexUsageWidget.exe"
+                  WorkingDirectory="INSTALLFOLDER" Icon="WidgetIcon" />
+        <RegistryValue Root="HKCU" Key="Software\vortydev\CodexUsageWidget\Installer"
+                       Name="StartMenuShortcut" Type="integer" Value="1" KeyPath="yes" />
+      </Component>
+    </StandardDirectory>
+    <StandardDirectory Id="DesktopFolder">
+      <Component Id="DesktopShortcutComponent" Guid="*">
+        <Shortcut Id="WidgetDesktopShortcut" Name="Codex Usage Widget" Target="[INSTALLFOLDER]CodexUsageWidget.exe"
+                  WorkingDirectory="INSTALLFOLDER" Icon="WidgetIcon" />
+        <RegistryValue Root="HKCU" Key="Software\vortydev\CodexUsageWidget\Installer"
+                       Name="DesktopShortcut" Type="integer" Value="1" KeyPath="yes" />
+      </Component>
+    </StandardDirectory>
+    <Feature Id="Widget" Title="Codex Usage Widget">
+      <ComponentGroupRef Id="WidgetPayload" />
+      <ComponentRef Id="StartMenuShortcut" />
+      <ComponentRef Id="InstallationIdentity" />
+    </Feature>
+    <Feature Id="DesktopShortcut" Title="Desktop shortcut" Level="200">
+      <ComponentRef Id="DesktopShortcutComponent" />
+    </Feature>
+    <UIRef Id="WidgetUI" />
+  </Package>
+</Wix>

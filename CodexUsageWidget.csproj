@@ -9,9 +9,10 @@
     <AssemblyName>CodexUsageWidget</AssemblyName>
     <RootNamespace>CodexUsageWidget</RootNamespace>
     <ApplicationIcon>assets\codex-usage-hourglass.ico</ApplicationIcon>
-    <Version>0.1.6</Version>
+    <Version>0.2.0</Version>
   </PropertyGroup>
   <ItemGroup>
     <Compile Remove="tests\**\*.cs" />
+    <Compile Remove="installer\**\*.cs" />
   </ItemGroup>
 </Project>

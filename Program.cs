@@ -27,12 +27,15 @@ internal sealed class UsageForm : Form
     private readonly System.Windows.Forms.Timer _poll = new() { Interval = 60_000 };
     private readonly WidgetSettings _settings;
     private readonly string? _settingsPath;
+    private readonly UpdateChecker _updateChecker;
+    private readonly CancellationTokenSource _closing = new();
     private AppServerClient? _server;
     private bool _connected;
     private int _appliedFontSize = 9;
 
-    public UsageForm(bool startServer = true, string? settingsPath = null)
+    public UsageForm(bool startServer = true, string? settingsPath = null, UpdateChecker? updateChecker = null)
     {
+        _updateChecker = updateChecker ?? new UpdateChecker();
         _settingsPath = settingsPath;
         _settings = WidgetSettings.Load(settingsPath);
         Text = "Codex Usage";
@@ -211,6 +214,9 @@ internal sealed class UsageForm : Form
         if (startServer) Shown += (_, _) => StartServer();
         FormClosed += (_, _) =>
         {
+            _closing.Cancel();
+            _updateChecker.Dispose();
+            _closing.Dispose();
             _poll.Stop();
             _poll.Dispose();
             _server?.Dispose();
@@ -243,12 +249,13 @@ internal sealed class UsageForm : Form
             Dock = DockStyle.Fill,
             Padding = new Padding(14),
             ColumnCount = 2,
-            RowCount = 11,
+            RowCount = 13,
             BackColor = BackColor,
         };
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        for (var row = 0; row < 9; row++) layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        for (var row = 0; row < 10; row++) layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 40));
         layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 
@@ -370,7 +377,62 @@ internal sealed class UsageForm : Form
             TextAlign = ContentAlignment.MiddleCenter,
             ForeColor = Color.FromArgb(125, 132, 143),
             Font = new Font("Segoe UI", 8F),
-        }, 0, 10);
+        }, 0, 12);
+
+        var updateActions = new BufferedFlowLayoutPanel
+        {
+            AutoSize = true, Dock = DockStyle.Fill, WrapContents = false,
+            Margin = Padding.Empty, BackColor = BackColor,
+        };
+        var checkUpdates = new Button { Text = "Check for updates", AutoSize = true, MinimumSize = new Size(150, 30) };
+        StyleButton(checkUpdates, primary: false);
+        var downloadUpdate = new LinkLabel
+        {
+            Text = "Download installer", AutoSize = true, Visible = false,
+            LinkColor = Color.FromArgb(42, 185, 160), ActiveLinkColor = Color.White,
+            VisitedLinkColor = Color.FromArgb(42, 185, 160), Margin = new Padding(8, 8, 0, 0),
+        };
+        var updateStatus = new Label
+        {
+            Text = "Updates are checked only when requested.", Dock = DockStyle.Fill,
+            ForeColor = Color.FromArgb(151, 158, 169), TextAlign = ContentAlignment.TopLeft,
+            AccessibleName = "Update check result",
+        };
+        Uri? downloadUri = null;
+        updateActions.Controls.Add(checkUpdates);
+        updateActions.Controls.Add(downloadUpdate);
+        layout.Controls.Add(updateActions, 0, 9);
+        layout.Controls.Add(updateStatus, 0, 10);
+        downloadUpdate.LinkClicked += (_, _) =>
+        {
+            if (downloadUri is null) return;
+            try { Process.Start(new ProcessStartInfo(downloadUri.AbsoluteUri) { UseShellExecute = true }); }
+            catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException)
+            {
+                updateStatus.Text = "Could not open your browser. Try again.";
+                updateStatus.ForeColor = Color.FromArgb(226, 95, 95);
+            }
+        };
+        checkUpdates.Click += async (_, _) =>
+        {
+            if (!checkUpdates.Enabled) return;
+            checkUpdates.Enabled = false;
+            downloadUpdate.Visible = false;
+            downloadUri = null;
+            updateStatus.Text = "Checking for updates…";
+            updateStatus.ForeColor = Color.FromArgb(151, 158, 169);
+            try
+            {
+                var result = await _updateChecker.CheckAsync(new Version(version), _closing.Token);
+                if (IsDisposed || _closing.IsCancellationRequested) return;
+                updateStatus.Text = result.Message;
+                updateStatus.ForeColor = result.IsError ? Color.FromArgb(226, 95, 95) : Color.FromArgb(151, 158, 169);
+                downloadUri = result.DownloadUri;
+                downloadUpdate.Visible = downloadUri is not null;
+            }
+            catch (OperationCanceledException) { }
+            finally { if (!IsDisposed) checkUpdates.Enabled = true; }
+        };
 
         var fontLabel = new Label
         {
@@ -410,7 +472,7 @@ internal sealed class UsageForm : Form
         };
         foreach (Control control in layout.Controls)
         {
-            if (layout.GetRow(control) is 0 or 3 or 7 or 10) layout.SetColumnSpan(control, 2);
+            if (layout.GetRow(control) is 0 or 3 or 7 or 9 or 10 or 12) layout.SetColumnSpan(control, 2);
             control.Margin = new Padding(3, 4, 3, 4);
         }
         page.Controls.Add(layout);

@@ -1,0 +1,23 @@
+<Project Sdk="WixToolset.Sdk/7.0.0">
+  <PropertyGroup>
+    <OutputType>Package</OutputType>
+    <InstallerPlatform>x64</InstallerPlatform>
+    <OutputName>CodexUsageWidget-$(WidgetVersion)-win-x64</OutputName>
+    <DefineConstants>WidgetVersion=$(WidgetVersion);WidgetProductCode=$(WidgetProductCode)</DefineConstants>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <!-- ICE91 warns about per-user directories in per-machine installs. This
+         package is strictly per-user and rejects ALLUSERS. All other ICEs run. -->
+    <SuppressIces>ICE91</SuppressIces>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="Package.wxs" />
+    <Compile Include="WidgetUI.wxs" />
+    <Compile Include="$(PayloadSource)" />
+    <PackageReference Include="WixToolset.UI.wixext" Version="7.0.0" />
+  </ItemGroup>
+  <Target Name="CheckPackagingInputs" BeforeTargets="BeforeBuild">
+    <Error Condition="'$(WidgetVersion)' == '' Or '$(WidgetProductCode)' == '' Or '$(PayloadDirectory)' == '' Or '$(PayloadSource)' == ''"
+           Text="Run build-installer.ps1 from the repository to publish and generate the installer payload." />
+  </Target>
+</Project>

@@ -1,0 +1,137 @@
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <Fragment>
+    <!-- Keep Windows Installer's native navigation and folder browser. -->
+    <UI Id="WidgetUI">
+      <TextStyle Id="WixUI_Font_Normal" FaceName="Segoe UI" Size="9" />
+      <TextStyle Id="WixUI_Font_Bigger" FaceName="Segoe UI" Size="12" />
+      <TextStyle Id="WixUI_Font_Title" FaceName="Segoe UI" Size="9" Bold="yes" />
+      <Property Id="DefaultUIFont" Value="WixUI_Font_Normal" />
+      <Property Id="WIDGET_SHOWDETAILS" Value="0" />
+      <DialogRef Id="ErrorDlg" />
+      <DialogRef Id="InstallDirDlg" />
+      <DialogRef Id="BrowseDlg" />
+      <DialogRef Id="FilesInUse" />
+      <DialogRef Id="MsiRMFilesInUse" />
+      <DialogRef Id="PrepareDlg" />
+      <DialogRef Id="ResumeDlg" />
+      <DialogRef Id="WelcomeDlg" />
+      <DialogRef Id="MaintenanceWelcomeDlg" />
+      <DialogRef Id="MaintenanceTypeDlg" />
+      <!-- WiX's standard ready dialog hard-codes ecmus repair. Use amus here
+           so changed, non-checksummed files are restored as well as missing ones. -->
+      <Dialog Id="WidgetVerifyReadyDlg" Width="370" Height="270" Title="[ProductName] Setup" TrackDiskSpace="yes">
+        <Control Id="Title" Type="Text" X="20" Y="20" Width="330" Height="35" NoPrefix="yes"
+                 Text="{\WixUI_Font_Bigger}Ready to change [ProductName]" />
+        <Control Id="Description" Type="Text" X="20" Y="65" Width="330" Height="45" NoPrefix="yes"
+                 Text="Close Codex Usage Widget before continuing. Your saved settings will be kept. Choose the action below to continue, or Cancel to leave the installation unchanged." />
+        <Control Id="Location" Type="Text" X="20" Y="115" Width="330" Height="45" NoPrefix="yes"
+                 Text="Application folder: [INSTALLFOLDER]" />
+        <Control Id="ShowDetails" Type="CheckBox" X="20" Y="170" Width="330" Height="18"
+                 Property="WIDGET_SHOWDETAILS" CheckBoxValue="1" Text="Show action details during setup" />
+        <Control Id="SpaceError" Type="Text" X="20" Y="195" Width="330" Height="30" Hidden="yes"
+                 ShowCondition="OutOfDiskSpace = 1" Text="There is not enough free disk space. Free some space and restart Setup." />
+        <Control Id="Install" Type="PushButton" X="212" Y="243" Width="80" Height="17" Text="Install" Hidden="yes" Disabled="yes"
+                 ShowCondition="NOT Installed" EnableCondition="NOT Installed AND OutOfDiskSpace &lt;&gt; 1" DefaultCondition="NOT Installed">
+          <Publish Event="EndDialog" Value="Return" Condition="OutOfDiskSpace &lt;&gt; 1" />
+        </Control>
+        <Control Id="Repair" Type="PushButton" X="212" Y="243" Width="80" Height="17" Text="Repair" Hidden="yes" Disabled="yes"
+                 ShowCondition="Installed AND WixUI_InstallMode = &quot;Repair&quot;" EnableCondition="Installed AND WixUI_InstallMode = &quot;Repair&quot; AND OutOfDiskSpace &lt;&gt; 1"
+                 DefaultCondition="WixUI_InstallMode = &quot;Repair&quot;">
+          <Publish Event="ReinstallMode" Value="amus" Condition="OutOfDiskSpace &lt;&gt; 1" Order="1" />
+          <Publish Event="Reinstall" Value="All" Condition="OutOfDiskSpace &lt;&gt; 1" Order="2" />
+          <Publish Event="EndDialog" Value="Return" Condition="OutOfDiskSpace &lt;&gt; 1" Order="3" />
+        </Control>
+        <Control Id="Remove" Type="PushButton" X="212" Y="243" Width="80" Height="17" Text="Remove" Hidden="yes" Disabled="yes"
+                 ShowCondition="Installed AND WixUI_InstallMode = &quot;Remove&quot;" EnableCondition="Installed AND WixUI_InstallMode = &quot;Remove&quot;"
+                 DefaultCondition="WixUI_InstallMode = &quot;Remove&quot;">
+          <Publish Event="Remove" Value="All" Order="1" />
+          <Publish Event="EndDialog" Value="Return" Order="2" />
+        </Control>
+        <Control Id="Back" Type="PushButton" X="156" Y="243" Width="56" Height="17" Text="Back" />
+        <Control Id="Cancel" Type="PushButton" X="304" Y="243" Width="56" Height="17" Text="Cancel" Cancel="yes">
+          <Publish Event="SpawnDialog" Value="CancelDlg" />
+        </Control>
+      </Dialog>
+      <Dialog Id="WidgetProgressDlg" Width="370" Height="270" Title="[ProductName] Setup" Modeless="yes">
+        <Control Id="Title" Type="Text" X="20" Y="20" Width="330" Height="25" NoPrefix="yes" Text="{\WixUI_Font_Bigger}Setup is working" />
+        <Control Id="Status" Type="Text" X="20" Y="60" Width="330" Height="35" NoPrefix="yes">
+          <Subscribe Event="ActionText" Attribute="Text" />
+        </Control>
+        <Control Id="Progress" Type="ProgressBar" X="20" Y="105" Width="330" Height="12" ProgressBlocks="yes">
+          <Subscribe Event="SetProgress" Attribute="Progress" />
+        </Control>
+        <Control Id="ShowDetails" Type="CheckBox" X="20" Y="132" Width="330" Height="18"
+                 CheckBoxPropertyRef="WIDGET_SHOWDETAILS" Text="Show action details" />
+        <Control Id="ActionDetails" Type="Text" X="20" Y="160" Width="330" Height="40" NoPrefix="yes" Hidden="yes"
+                 ShowCondition="WIDGET_SHOWDETAILS = 1" HideCondition="WIDGET_SHOWDETAILS &lt;&gt; 1">
+          <Subscribe Event="ActionData" Attribute="Text" />
+        </Control>
+        <Control Id="LogNote" Type="Text" X="20" Y="205" Width="330" Height="25" NoPrefix="yes"
+                 Text="A detailed log is saved. Choose Open log when setup ends." />
+        <Control Id="Cancel" Type="PushButton" X="294" Y="243" Width="56" Height="17" Cancel="yes" Text="Cancel">
+          <Publish Event="SpawnDialog" Value="CancelDlg" />
+        </Control>
+      </Dialog>
+      <!-- Identical log controls remain available on success, failure and cancellation. -->
+      <?foreach Outcome in ExitDialog;FatalError;UserExit ?>
+      <Dialog Id="Widget$(Outcome)" Width="370" Height="270" Title="[ProductName] Setup">
+        <?if $(Outcome) = ExitDialog ?>
+        <Control Id="Title" Type="Text" X="20" Y="20" Width="330" Height="35" NoPrefix="yes" Text="{\WixUI_Font_Bigger}Setup completed" />
+        <Control Id="Description" Type="Text" X="20" Y="65" Width="330" Height="40" NoPrefix="yes" Text="Windows Installer completed the requested action. Your saved settings were kept. Restart Windows if prompted." />
+        <?elseif $(Outcome) = FatalError ?>
+        <Control Id="Title" Type="Text" X="20" Y="20" Width="330" Height="35" NoPrefix="yes" Text="{\WixUI_Font_Bigger}Setup failed" />
+        <Control Id="Description" Type="Text" X="20" Y="65" Width="330" Height="40" NoPrefix="yes" Text="Setup did not complete successfully. Open the detailed log to see what happened; no success is being reported." />
+        <?else?>
+        <Control Id="Title" Type="Text" X="20" Y="20" Width="330" Height="35" NoPrefix="yes" Text="{\WixUI_Font_Bigger}Setup cancelled" />
+        <Control Id="Description" Type="Text" X="20" Y="65" Width="330" Height="40" NoPrefix="yes" Text="The requested action was cancelled. You can inspect the log before closing setup." />
+        <?endif?>
+        <Control Id="LogLocation" Type="Text" X="20" Y="115" Width="330" Height="65" NoPrefix="yes" Text="Setup log: [MsiLogFileLocation]" />
+        <Control Id="OpenLog" Type="PushButton" X="20" Y="195" Width="80" Height="20" Text="Open log" Disabled="yes" EnableCondition="MsiLogFileLocation">
+          <Publish Event="DoAction" Value="OpenInstallerLog" Condition="MsiLogFileLocation" />
+        </Control>
+        <Control Id="Finish" Type="PushButton" X="294" Y="243" Width="56" Height="17" Default="yes" Cancel="yes" Text="Finish">
+          <?if $(Outcome) = ExitDialog ?>
+          <Publish Event="EndDialog" Value="Return" />
+          <?else?>
+          <Publish Event="EndDialog" Value="Exit" />
+          <?endif?>
+        </Control>
+      </Dialog>
+      <?endforeach?>
+      <InstallUISequence>
+        <!-- WixUI_Common brings its stock virtual actions. Disable them explicitly;
+             the uniquely named dialogs below own progress and all exit outcomes. -->
+        <Show Dialog="override ProgressDlg" Before="WidgetProgressDlg" Condition="0" />
+        <Show Dialog="override ExitDialog" Before="WidgetProgressDlg" Condition="0" />
+        <Show Dialog="override FatalError" Before="WidgetProgressDlg" Condition="0" />
+        <Show Dialog="override UserExit" Before="WidgetProgressDlg" Condition="0" />
+        <Show Dialog="WidgetProgressDlg" Before="ExecuteAction" />
+        <Show Dialog="WidgetExitDialog" OnExit="success" />
+        <Show Dialog="WidgetFatalError" OnExit="error" />
+        <Show Dialog="WidgetUserExit" OnExit="cancel" />
+      </InstallUISequence>
+      <Publish Dialog="WelcomeDlg" Control="Next" Event="NewDialog" Value="InstallDirDlg" Condition="NOT PREVIOUSINSTALLFOLDER" Order="1" />
+      <Publish Dialog="WelcomeDlg" Control="Next" Event="NewDialog" Value="WidgetVerifyReadyDlg" Condition="PREVIOUSINSTALLFOLDER" Order="2" />
+      <Publish Dialog="InstallDirDlg" Control="Back" Event="NewDialog" Value="WelcomeDlg" />
+      <Publish Dialog="InstallDirDlg" Control="Next" Event="CheckTargetPath" Value="[WIXUI_INSTALLDIR]" Order="1" />
+      <Publish Dialog="InstallDirDlg" Control="Next" Event="SetTargetPath" Value="[WIXUI_INSTALLDIR]" Order="3" />
+      <Publish Dialog="InstallDirDlg" Control="Next" Event="NewDialog" Value="WidgetVerifyReadyDlg" Order="4" />
+      <Publish Dialog="InstallDirDlg" Control="ChangeFolder" Property="_BrowseProperty" Value="[WIXUI_INSTALLDIR]" Order="1" />
+      <Publish Dialog="InstallDirDlg" Control="ChangeFolder" Event="SpawnDialog" Value="BrowseDlg" Order="2" />
+      <Publish Dialog="BrowseDlg" Control="OK" Event="CheckTargetPath" Value="[WIXUI_INSTALLDIR]" Order="1" />
+      <Publish Dialog="BrowseDlg" Control="OK" Event="SetTargetPath" Value="[_BrowseProperty]" Order="3" />
+      <Publish Dialog="BrowseDlg" Control="OK" Event="EndDialog" Value="Return" Order="4" />
+      <Publish Dialog="WidgetVerifyReadyDlg" Control="Back" Event="NewDialog" Value="InstallDirDlg" Condition="NOT Installed AND NOT PREVIOUSINSTALLFOLDER" Order="1" />
+      <Publish Dialog="WidgetVerifyReadyDlg" Control="Back" Event="NewDialog" Value="WelcomeDlg" Condition="NOT Installed AND PREVIOUSINSTALLFOLDER" Order="2" />
+      <Publish Dialog="WidgetVerifyReadyDlg" Control="Back" Event="NewDialog" Value="MaintenanceTypeDlg" Condition="Installed" Order="3" />
+      <Publish Dialog="MaintenanceWelcomeDlg" Control="Next" Event="NewDialog" Value="MaintenanceTypeDlg" />
+      <Publish Dialog="MaintenanceTypeDlg" Control="RepairButton" Event="NewDialog" Value="WidgetVerifyReadyDlg" />
+      <Publish Dialog="MaintenanceTypeDlg" Control="RemoveButton" Event="NewDialog" Value="WidgetVerifyReadyDlg" />
+      <Publish Dialog="MaintenanceTypeDlg" Control="Back" Event="NewDialog" Value="MaintenanceWelcomeDlg" />
+      <!-- The unused stock install dialog is still linked by WixUI_Common and
+           used for administrative UI; its Finish control must remain valid. -->
+      <Publish Dialog="ExitDialog" Control="Finish" Event="EndDialog" Value="Return" Order="999" />
+    </UI>
+    <UIRef Id="WixUI_Common" />
+  </Fragment>
+</Wix>

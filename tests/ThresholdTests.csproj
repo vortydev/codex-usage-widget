@@ -9,5 +9,10 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="..\Program.cs" Link="Program.cs" />
+    <Compile Include="..\UpdateChecker.cs" Link="UpdateChecker.cs" />
+    <Compile Include="..\installer\launcher\SetupServices.cs" Link="SetupServices.cs" />
+    <Compile Include="..\installer\launcher\SetupDetails.cs" Link="SetupDetails.cs" />
+    <Compile Include="..\installer\launcher\SetupTheme.cs" Link="SetupTheme.cs" />
+    <Compile Include="..\installer\launcher\Program.cs" Link="SetupProgram.cs" />
   </ItemGroup>
 </Project>
